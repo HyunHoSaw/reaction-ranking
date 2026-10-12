@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>반응속도 테스트</title>
+<style>
+  body{margin:0;font-family:sans-serif;background:#111;color:#fff;text-align:center}
+  #box{height:50vh;display:flex;align-items:center;justify-content:center;font-size:28px;cursor:pointer;user-select:none}
+  .idle{background:#2b6cb0} .wait{background:#c53030} .go{background:#2f855a}
+  #panel{padding:16px}
+  input,button{font-size:16px;padding:8px;margin:4px}
+  ol{display:inline-block;text-align:left}
+</style>
+</head>
+<body>
+<div id="box" class="idle">클릭해서 시작</div>
+<div id="panel">
+  <p id="result">아직 기록 없음</p>
+  <input id="name" placeholder="이름" maxlength="20">
+  <button id="submit" disabled>랭킹 등록</button>
+  <h2>랭킹 TOP 10</h2>
+  <ol id="ranking"></ol>
+  <p id="msg"></p>
+</div>
+<script>
+const box = document.getElementById('box');
+const msg = document.getElementById('msg');
+let state = 'idle', timer = null, start = 0, lastMs = null;
+
+// 게임 진행: 파랑(대기) → 빨강(기다려) → 초록(클릭!)
+box.addEventListener('pointerdown', () => {
+  if (state === 'idle') {
+    state = 'wait'; box.className = 'wait'; box.textContent = '초록색이 되면 클릭!';
+    timer = setTimeout(() => {
+      state = 'go'; box.className = 'go'; box.textContent = '지금!';
+      start = performance.now();
+    }, 2000 + Math.random() * 3000);           // 2~5초 랜덤
+  } else if (state === 'wait') {
+    clearTimeout(timer);
+    state = 'idle'; box.className = 'idle'; box.textContent = '너무 빨라요! 다시 클릭';
+  } else if (state === 'go') {
+    lastMs = Math.round(performance.now() - start);
+    state = 'idle'; box.className = 'idle'; box.textContent = lastMs + ' ms — 다시 하려면 클릭';
+    document.getElementById('result').textContent = '이번 기록: ' + lastMs + ' ms';
+    document.getElementById('submit').disabled = false;
+  }
+});
+
+// 점수 등록 → 백엔드 API (/api/scores)
+document.getElementById('submit').addEventListener('click', async () => {
+  const name = document.getElementById('name').value.trim();
+  if (!name) { alert('이름을 입력하세요'); return; }
+  try {
+    const res = await fetch('/api/scores', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name: name, ms: lastMs})
+    });
+    if (!res.ok) throw new Error(res.status);
+    document.getElementById('submit').disabled = true;
+    loadRanking();
+  } catch (e) { msg.textContent = '랭킹 서버 연결 실패 (백엔드가 아직 없으면 정상)'; }
+});
+
+// 랭킹 불러오기 → 백엔드 API (/api/ranking)
+async function loadRanking() {
+  try {
+    const res = await fetch('/api/ranking');
+    if (!res.ok) throw new Error(res.status);
+    const list = await res.json();
+    const ol = document.getElementById('ranking');
+    ol.innerHTML = '';
+    list.forEach(r => {
+      const li = document.createElement('li');
+      li.textContent = r.name + ' — ' + r.ms + ' ms';   // textContent로 넣어서 이상한 이름(HTML 코드)도 안전
+      ol.appendChild(li);
+    });
+    msg.textContent = '';
+  } catch (e) { msg.textContent = '랭킹 서버 연결 실패 (백엔드가 아직 없으면 정상)'; }
+}
+loadRanking();
+</script>
+</body>
+</html>
