@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: reaction-backend:v1
+          image: 276947488185.dkr.ecr.ap-northeast-2.amazonaws.com/reaction-backend:v1
           env:
             - name: REDIS_HOST
               value: redis       # Compose의 environment와 같은 역할

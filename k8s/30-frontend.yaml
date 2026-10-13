@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: reaction-frontend:v1
+          image: 276947488185.dkr.ecr.ap-northeast-2.amazonaws.com/reaction-frontend:v1
           ports:
             - containerPort: 80
           resources:
@@ -31,6 +31,7 @@ metadata:
   name: frontend
   namespace: reaction
 spec:
+  type: LoadBalancer      # AWS에 로드밸런서를 만들어달라고 요청
   selector:
     app: frontend
   ports:
