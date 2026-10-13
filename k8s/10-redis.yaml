@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: reaction
+spec:
+  replicas: 1                    # Redis는 1개만 (여러 개면 데이터가 갈라짐)
+  selector:
+    matchLabels:
+      app: redis                 # "app=redis" 꼬리표 붙은 Pod를 관리하겠다
+  template:                      # 아래는 만들 Pod의 설계도
+    metadata:
+      labels:
+        app: redis               # Pod에 꼬리표 붙이기 (위 selector와 같아야 함)
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+---                              # 한 파일에 여러 설정을 넣을 때 구분선
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis                    # 이 이름으로 접근 가능 → backend의 REDIS_HOST와 일치
+  namespace: reaction
+spec:
+  selector:
+    app: redis                   # app=redis 꼬리표 Pod에게 요청 전달
+  ports:
+    - port: 6379

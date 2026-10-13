@@ -1,0 +1,4 @@
+apiVersion: v1
+kind: Namespace          # 종류: 네임스페이스
+metadata:
+  name: reaction         # 우리 앱 전용 구역 이름

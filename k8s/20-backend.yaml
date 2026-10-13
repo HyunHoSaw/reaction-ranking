@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: reaction
+spec:
+  replicas: 2                    # 같은 Pod 2개 → 하나 죽어도 서비스 유지
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: reaction-backend:v1
+          env:
+            - name: REDIS_HOST
+              value: redis       # Compose의 environment와 같은 역할
+          ports:
+            - containerPort: 8000
+          readinessProbe:        # "준비됐는지" 검사 → 통과해야 요청을 받음
+            httpGet:
+              path: /api/health  # 아까 만든 health 주소를 여기서 활용
+              port: 8000
+            periodSeconds: 5
+          resources:             # 이 컨테이너가 쓸 자원 (EKS 노드 크기 정할 때 기준)
+            requests:
+              cpu: 100m          # 0.1 CPU
+              memory: 128Mi
+            limits:
+              memory: 256Mi      # 이 이상 쓰면 강제 재시작
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend                  # nginx.conf의 http://backend:8000 과 일치
+  namespace: reaction
+spec:
+  selector:
+    app: backend
+  ports:
+    - port: 8000
