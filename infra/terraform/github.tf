@@ -69,3 +69,22 @@ resource "aws_iam_role_policy" "github_actions" {
     ]
   })
 }
+
+# 4) 쿠버네티스 안에서의 권한: GitHub Actions 역할을 클러스터에 등록
+resource "aws_eks_access_entry" "github_actions" {
+  cluster_name  = module.eks.cluster_name
+  principal_arn = aws_iam_role.github_actions.arn
+}
+
+# 5) 등록된 역할에 배포 권한 부여 (학습용: 클러스터 관리자)
+resource "aws_eks_access_policy_association" "github_actions" {
+  cluster_name  = module.eks.cluster_name
+  principal_arn = aws_iam_role.github_actions.arn
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+
+  access_scope {
+    type = "cluster"
+  }
+
+  depends_on = [aws_eks_access_entry.github_actions] # 등록이 먼저 끝나야 권한을 줄 수 있음
+}
