@@ -1,0 +1,74 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+    paths:                       # 앱 코드나 k8s 설정이 바뀔 때만 실행
+      - "frontend/**"
+      - "backend/**"
+      - "k8s/**"
+  workflow_dispatch:             # GitHub 화면에서 수동 실행 버튼도 만들기
+
+permissions:
+  id-token: write                # OIDC 신분증(토큰) 발급 허용 ← 핵심
+  contents: read                 # 코드 읽기
+
+env:
+  AWS_REGION: ap-northeast-2
+  CLUSTER: reaction-eks
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04-arm    # ARM 서버에서 빌드 (EKS 노드가 ARM이라 맞춤)
+    steps:
+      - name: 코드 가져오기
+        uses: actions/checkout@v4
+
+      - name: AWS 임시 출입증 받기 (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: ECR 로그인
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: 이미지 빌드 & 업로드
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG: ${{ github.sha }}   # 커밋 번호를 버전 꼬리표로 → 어떤 코드가 배포됐는지 추적 가능
+        run: |
+          docker build -t $REGISTRY/reaction-frontend:$TAG ./frontend
+          docker build -t $REGISTRY/reaction-backend:$TAG  ./backend
+          docker push $REGISTRY/reaction-frontend:$TAG
+          docker push $REGISTRY/reaction-backend:$TAG
+
+      - name: 도구 준비 (kubectl, AWS CLI)
+        run: |
+          if ! command -v aws >/dev/null; then
+            curl -sSL "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o awscli.zip
+            unzip -q awscli.zip && sudo ./aws/install
+          fi
+          if ! command -v kubectl >/dev/null; then
+            curl -sSLo kubectl "https://dl.k8s.io/release/$(curl -sSL https://dl.k8s.io/release/stable.txt)/bin/linux/arm64/kubectl"
+            chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+          fi
+
+      - name: EKS에 배포
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG: ${{ github.sha }}
+        run: |
+          aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER
+
+          # YAML 안의 이미지 주소를 이번 버전으로 바꿔치기
+          sed -i "s#image: .*reaction-frontend:.*#image: $REGISTRY/reaction-frontend:$TAG#" k8s/30-frontend.yaml
+          sed -i "s#image: .*reaction-backend:.*#image: $REGISTRY/reaction-backend:$TAG#"  k8s/20-backend.yaml
+
+          kubectl apply -f k8s/
+
+          # 새 Pod로 교체가 끝날 때까지 기다림 (실패하면 워크플로도 실패 표시)
+          kubectl -n reaction rollout status deployment/backend  --timeout=180s
+          kubectl -n reaction rollout status deployment/frontend --timeout=180s
+          kubectl -n reaction get pods -o wide
