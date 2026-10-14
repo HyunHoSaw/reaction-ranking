@@ -23,7 +23,7 @@ resource "aws_iam_role" "github_actions" {
         }
         StringLike = {
           # 내 저장소의 main 브랜치에서 온 요청만 허용
-          "token.actions.githubusercontent.com:sub" = "repo:HyunHoSaw/reaction-ranking:ref:refs/heads/main"
+          "token.actions.githubusercontent.com:sub" = "repo:HyunHoSaw@306095832/reaction-ranking@1416292779:ref:refs/heads/main"
         }
       }
     }]
