@@ -1,0 +1,17 @@
+# kube-prometheus-stack 설정 (학습용으로 가볍게)
+alertmanager:
+  enabled: false          # 알림 기능은 끔 (자원 절약)
+
+prometheus:
+  prometheusSpec:
+    retention: 1d         # 데이터는 하루만 보관
+    resources:
+      requests:
+        cpu: 100m
+        memory: 400Mi
+
+grafana:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
