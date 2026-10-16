@@ -22,10 +22,10 @@ jobs:
     runs-on: ubuntu-24.04-arm    # ARM 서버에서 빌드 (EKS 노드가 ARM이라 맞춤)
     steps:
       - name: 코드 가져오기
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: AWS 임시 출입증 받기 (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}

@@ -31,6 +31,7 @@ spec:
               cpu: 100m          # 0.1 CPU
               memory: 128Mi
             limits:
+              cpu: 500m
               memory: 256Mi      # 이 이상 쓰면 강제 재시작
 ---
 apiVersion: v1
