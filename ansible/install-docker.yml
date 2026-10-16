@@ -1,0 +1,84 @@
+- name: 온프레미스 서버에 Docker 설치
+  hosts: onprem
+  become: true
+
+  tasks:
+    - name: 충돌하는 기본 패키지 제거
+      ansible.builtin.dnf:
+        name: [podman, buildah, runc]
+        state: absent
+
+    - name: 커널 모듈 설치 (클라우드 최소 이미지엔 없음, 지금 커널과 같은 버전)
+      ansible.builtin.dnf:
+        name:
+          - "kernel-modules-{{ ansible_facts['kernel'] }}"
+          - "kernel-modules-extra-{{ ansible_facts['kernel'] }}"
+        state: present
+
+    - name: Docker 공식 저장소 등록
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/rhel/docker-ce.repo
+        dest: /etc/yum.repos.d/docker-ce.repo
+        mode: "0644"
+
+    - name: Docker 설치 + 네트워크 도구(iptables)
+      ansible.builtin.dnf:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-compose-plugin
+          - iptables
+        state: present
+
+    - name: 컨테이너용 커널 모듈을 부팅 때마다 켜도록 등록
+      ansible.builtin.copy:
+        dest: /etc/modules-load.d/docker.conf
+        content: |
+          overlay
+          br_netfilter
+        mode: "0644"
+
+    - name: 커널 모듈 지금 바로 켜기
+      community.general.modprobe:
+        name: "{{ item }}"
+        state: present
+      loop: [overlay, br_netfilter]
+
+    - name: 아까 실패가 반복돼서 걸린 재시작 제한 풀기
+      ansible.builtin.command: systemctl reset-failed docker
+      changed_when: false
+      failed_when: false
+
+    - name: Docker 시작 (실패하면 원인 로그 출력)
+      block:
+        - name: Docker 서비스 시작 + 부팅 시 자동 시작
+          ansible.builtin.systemd:
+            name: docker
+            state: started
+            enabled: true
+      rescue:
+        - name: 실패 원인 로그 수집
+          ansible.builtin.command: journalctl -u docker.service --no-pager -n 30
+          register: docker_log
+        - name: 로그 보여주기
+          ansible.builtin.debug:
+            var: docker_log.stdout_lines
+        - name: 여기서 멈추기
+          ansible.builtin.fail:
+            msg: "Docker 시작 실패 - 위 로그를 확인하세요"
+
+    - name: 접속 계정 이름 확인 (sudo 없이)
+      ansible.builtin.command: whoami
+      become: false                     # 이 task만 sudo 끄기 → 진짜 내 계정
+      register: login_user
+      changed_when: false
+
+    - name: 접속 계정을 docker 그룹에 추가
+      ansible.builtin.user:
+        name: "{{ login_user.stdout }}"
+        groups: docker
+        append: true
+
+    - name: SSH 다시 연결 (그룹 변경 반영)
+      ansible.builtin.meta: reset_connection
